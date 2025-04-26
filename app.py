@@ -1,9 +1,11 @@
+import uuid
 from flask import Flask, jsonify, request, send_file
 from PIL import Image, ImageEnhance
 from rembg import remove # type: ignore
 from pdf2docx import Converter
 import fitz  # For PDF to HTML
 import pytesseract # type: ignore
+from flask import after_this_request
 import io
 import os
 
@@ -109,24 +111,51 @@ def pdf_to_word():
     if 'file' not in request.files:
         return {'error': 'No PDF uploaded'}, 400
 
-    # Ensure the folder exists
     doc_folder = 'doc_files'
-    if not os.path.exists(doc_folder):
-        os.makedirs(doc_folder)
+    os.makedirs(doc_folder, exist_ok=True)
 
-    # Save the uploaded PDF file
-    pdf_path = os.path.join(doc_folder, 'temp.pdf')
+    unique_id = str(uuid.uuid4())
+    pdf_path = os.path.join(doc_folder, f'{unique_id}.pdf')
+    docx_path = os.path.join(doc_folder, f'{unique_id}.docx')
+
     with open(pdf_path, 'wb') as f:
         f.write(request.files['file'].read())
 
-    # Convert PDF to DOCX
-    docx_path = os.path.join(doc_folder, 'output.docx')
     converter = Converter(pdf_path)
     converter.convert(docx_path, start=0, end=None)
     converter.close()
 
-    # Send the resulting DOCX file
+    @after_this_request
+    def cleanup(response):
+        try:
+            os.remove(pdf_path)
+            os.remove(docx_path)
+        except Exception as e:
+            app.logger.error(f'Error deleting temp files: {e}')
+        return response
+
     return send_file(docx_path, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', as_attachment=True, download_name='output.docx')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
