@@ -14,6 +14,14 @@ app = Flask(__name__)
 # Set Tesseract path (Windows)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
+# Allowed file extensions
+ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
+MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25MB max size
+
+# Function to check allowed file types
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 # Hello route
 @app.route('/api', methods=['GET'])
 def hello_world():
@@ -31,7 +39,11 @@ def remove_background():
     if 'file' not in request.files:
         return {'error': 'No image uploaded'}, 400
 
-    input_image = request.files['file'].read()
+    file = request.files['file']
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type, only image files allowed'}), 400
+
+    input_image = file.read()
     output_image = remove(input_image)
 
     image = Image.open(io.BytesIO(output_image))
@@ -47,7 +59,11 @@ def enhance_photo():
     if 'file' not in request.files:
         return {'error': 'No image uploaded'}, 400
 
-    input_image = Image.open(request.files['file'].stream).convert("RGB")
+    file = request.files['file']
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type, only image files allowed'}), 400
+
+    input_image = Image.open(file.stream).convert("RGB")
     enhanced = ImageEnhance.Brightness(
         ImageEnhance.Contrast(
             ImageEnhance.Sharpness(input_image).enhance(2.0)
@@ -101,17 +117,23 @@ def image_to_text():
     if 'file' not in request.files:
         return {'error': 'No image uploaded'}, 400
 
-    image = Image.open(io.BytesIO(request.files['file'].read()))
+    file = request.files['file']
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type, only image files allowed'}), 400
+
+    image = Image.open(io.BytesIO(file.read()))
     text = pytesseract.image_to_string(image)
     return jsonify({'extracted_text': text})
 
-
-
-
+# Convert PDF to Word
 @app.route('/api/pdf-to-word', methods=['POST'])
 def pdf_to_word():
     if 'file' not in request.files:
         return {'error': 'No PDF uploaded'}, 400
+
+    file = request.files['file']
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type, only PDF files allowed'}), 400
 
     doc_folder = 'doc_files'
     os.makedirs(doc_folder, exist_ok=True)
@@ -122,7 +144,7 @@ def pdf_to_word():
 
     # Save uploaded PDF
     with open(pdf_path, 'wb') as f:
-        f.write(request.files['file'].read())
+        f.write(file.read())
 
     # Convert PDF to DOCX
     converter = Converter(pdf_path)
@@ -142,34 +164,12 @@ def pdf_to_word():
             app.logger.error(f'Error deleting temp files: {e}')
         return response
 
-    # Serve from memory (not from filesystem)
     return send_file(
         io.BytesIO(docx_content),
         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         as_attachment=True,
         download_name='output.docx'
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
