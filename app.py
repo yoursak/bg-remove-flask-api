@@ -105,7 +105,9 @@ def image_to_text():
     text = pytesseract.image_to_string(image)
     return jsonify({'extracted_text': text})
 
-# Convert PDF to Word
+
+
+
 @app.route('/api/pdf-to-word', methods=['POST'])
 def pdf_to_word():
     if 'file' not in request.files:
@@ -118,12 +120,18 @@ def pdf_to_word():
     pdf_path = os.path.join(doc_folder, f'{unique_id}.pdf')
     docx_path = os.path.join(doc_folder, f'{unique_id}.docx')
 
+    # Save uploaded PDF
     with open(pdf_path, 'wb') as f:
         f.write(request.files['file'].read())
 
+    # Convert PDF to DOCX
     converter = Converter(pdf_path)
     converter.convert(docx_path, start=0, end=None)
     converter.close()
+
+    # Read DOCX into memory
+    with open(docx_path, 'rb') as f:
+        docx_content = f.read()
 
     @after_this_request
     def cleanup(response):
@@ -134,7 +142,13 @@ def pdf_to_word():
             app.logger.error(f'Error deleting temp files: {e}')
         return response
 
-    return send_file(docx_path, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', as_attachment=True, download_name='output.docx')
+    # Serve from memory (not from filesystem)
+    return send_file(
+        io.BytesIO(docx_content),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True,
+        download_name='output.docx'
+    )
 
 
 
