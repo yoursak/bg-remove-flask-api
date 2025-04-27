@@ -175,33 +175,44 @@ def pdf_to_word():
 # Convert image to Word
 @app.route('/api/image-to-word', methods=['POST'])
 def image_to_word():
-    if 'file' not in request.files:
-        return {'error': 'No image uploaded'}, 400
+    try:
+        if 'file' not in request.files:
+            return {'error': 'No image uploaded'}, 400
 
-    file = request.files['file']
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Invalid file type, only image files allowed'}), 400
+        file = request.files['file']
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type, only image files allowed'}), 400
 
-    # Read the image and extract text using pytesseract
-    image = Image.open(io.BytesIO(file.read()))
-    text = pytesseract.image_to_string(image)
+        # Read the image and extract text using pytesseract
+        image = Image.open(io.BytesIO(file.read()))
+        text = pytesseract.image_to_string(image)
 
-    # Create a Word document and add the extracted text
-    doc = Document()
-    doc.add_paragraph(text)
+        # Create a Word document and add the extracted text
+        doc = Document()
+        doc.add_paragraph(text)
 
-    # Save the Word document to a temporary location
-    unique_id = str(uuid.uuid4())  # Generate a unique ID for the file
-    word_file_path = os.path.join('word_files', f'{unique_id}.docx')
+        # Save the Word document to a temporary location
+        unique_id = str(uuid.uuid4())  # Generate a unique ID for the file
+        word_file_path = os.path.join('word_files', f'{unique_id}.docx')
 
-    # Ensure the folder exists
-    os.makedirs(os.path.dirname(word_file_path), exist_ok=True)
+        # Ensure the folder exists
+        os.makedirs(os.path.dirname(word_file_path), exist_ok=True)
 
-    # Save the document
-    doc.save(word_file_path)
+        # Save the document
+        doc.save(word_file_path)
 
-    # Send the resulting Word file as a download
-    return send_file(word_file_path, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', as_attachment=True, download_name=f'{unique_id}.docx')
+        # Send the resulting Word file as a download
+        return send_file(
+            word_file_path,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            as_attachment=True,
+            download_name=f'{unique_id}.docx'
+        )
+
+    except Exception as e:
+        logging.error(f"Error processing image to word: {e}")
+        return {'error': str(e)}, 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
